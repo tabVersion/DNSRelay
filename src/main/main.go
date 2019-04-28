@@ -28,9 +28,9 @@ type DNSHeader struct {
 }
 
 type DNSQuestion struct {
-	qname  []byte
-	qtype  []byte
-	qclass []byte
+	questionName  []byte
+	questionType  []byte
+	questionClass []byte
 }
 
 type DNSAnswer struct {
@@ -91,11 +91,11 @@ func getQuestion(data []byte) DNSQuestion {
 	qnameBytes := data[12 : len(data)-4]
 
 	question := &DNSQuestion{
-		qname:  qnameBytes,
-		qtype:  data[len(data)-4 : len(data)-2],
-		qclass: data[len(data)-2 : len(data)],
+		questionName:  qnameBytes,
+		questionType:  data[len(data)-4 : len(data)-2],
+		questionClass: data[len(data)-2 : len(data)],
 	}
-	debug("qname: %v\n", question.qname)
+	debug("questionName: %v\n", question.questionName)
 	return *question
 }
 
@@ -105,7 +105,7 @@ func Forward(data []byte, remoteDNS string) []byte {
 		Port: 53,
 	})
 	if err != nil {
-		log.Println("连接失败!", err)
+		log.Println("connect failed!\n", err)
 		return nil
 	}
 	t := time.Now()
@@ -113,23 +113,23 @@ func Forward(data []byte, remoteDNS string) []byte {
 	socket.SetDeadline(t.Add(time.Duration(5 * time.Second)))
 
 	defer socket.Close()
-	// 发送数据
+
 	_, err = socket.Write(data)
 	if err != nil {
-		log.Println("发送数据失败!", err)
+		log.Println("send data failed!\n", err)
 		return nil
 	}
-	// 接收数据
-	revdata := make([]byte, 4096)
-	rn, remoteAddr, err := socket.ReadFromUDP(revdata)
+
+	receiveData := make([]byte, 4096)
+	rn, remoteAddr, err := socket.ReadFromUDP(receiveData)
 	if err != nil {
-		log.Println("从", remoteAddr, "””读取数据失败!", err)
+		log.Println("from ", remoteAddr, " read data failed!\n", err)
 		return nil
 	}
 	//log.Println(rn, remoteAddr)
-	//log.Printf("%x\n", revdata[:rn])
+	//log.Printf("%x\n", receiveData[:rn])
 
-	return revdata[:rn]
+	return receiveData[:rn]
 }
 
 func readConfig(dnsListPath string) map[string]string {
@@ -162,7 +162,7 @@ func readConfig(dnsListPath string) map[string]string {
 				domain = ""
 			}
 		} else {
-			log.Printf("dns 配置错误，请检查：%s", dnsList)
+			log.Printf("dns config error, please check %s", dnsList)
 		}
 
 	}
@@ -193,9 +193,9 @@ func cacheDNS(header DNSHeader, question DNSQuestion, ip string) []byte {
 
 	response.question = question
 
-	response.answer.aname = question.qname
-	response.answer.atype = question.qtype
-	response.answer.aclass = question.qclass
+	response.answer.aname = question.questionName
+	response.answer.atype = question.questionType
+	response.answer.aclass = question.questionClass
 	response.answer.ttl = 600
 	response.answer.rdlen = 4
 	response.answer.rdata = ipAddrToByte(ip)
@@ -205,8 +205,8 @@ func cacheDNS(header DNSHeader, question DNSQuestion, ip string) []byte {
 }
 
 func reslove(response DNSResponse) []byte {
-	buf := make([]byte, 30+len(response.question.qname)+2)
-	offset := len(response.question.qname)
+	buf := make([]byte, 30+len(response.question.questionName)+2)
+	offset := len(response.question.questionName)
 
 	buf[0] = response.header.id[0]
 	buf[1] = response.header.id[1]
@@ -232,9 +232,9 @@ func reslove(response DNSResponse) []byte {
 	buf[10] = byte(0x00)
 	buf[11] = byte(0x00)
 
-	writebytesToBuffer(buf, response.question.qname, 12)
-	writebytesToBuffer(buf, response.question.qtype, 12+int64(offset))
-	writebytesToBuffer(buf, response.question.qclass, 14+int64(offset))
+	writebytesToBuffer(buf, response.question.questionName, 12)
+	writebytesToBuffer(buf, response.question.questionType, 12+int64(offset))
+	writebytesToBuffer(buf, response.question.questionClass, 14+int64(offset))
 
 	offset += 16
 	writebytesToBuffer(buf, []byte{0xc0, 0x0c}, int64(offset))
@@ -282,8 +282,8 @@ func main() {
 			log.Printf("error during read: %s", readErr)
 		}
 
-		if dnsMap == nil || dnsMap[parseDomain(question.qname)] == "" {
-			log.Printf("forward %s to %s", parseDomain(question.qname), remoteDNS)
+		if dnsMap == nil || dnsMap[parseDomain(question.questionName)] == "" {
+			log.Printf("forward %s to %s", parseDomain(question.questionName), remoteDNS)
 			_, writeErr := listener.WriteToUDP(Forward(data[:n], remoteDNS), remoteAddr)
 
 			if writeErr != nil {
@@ -291,12 +291,12 @@ func main() {
 			}
 			continue
 		}
-		rsp := cacheDNS(header, question, dnsMap[parseDomain(question.qname)])
+		rsp := cacheDNS(header, question, dnsMap[parseDomain(question.questionName)])
 		_, writeErr := listener.WriteToUDP(rsp, remoteAddr)
 		if writeErr != nil {
 			log.Printf("error during write: %s", writeErr)
 		} else {
-			log.Printf("hook %s return %s", parseDomain(question.qname), dnsMap[parseDomain(question.qname)])
+			log.Printf("hook %s return %s", parseDomain(question.questionName), dnsMap[parseDomain(question.questionName)])
 		}
 	}
 }
@@ -321,9 +321,9 @@ func refuseDNS(header DNSHeader, question DNSQuestion, ip string) []byte {
 
 	response.question = question
 
-	response.answer.aname = question.qname
-	response.answer.atype = question.qtype
-	response.answer.aclass = question.qclass
+	response.answer.aname = question.questionName
+	response.answer.atype = question.questionType
+	response.answer.aclass = question.questionClass
 	response.answer.ttl = 600
 	response.answer.rdlen = 4
 	response.answer.rdata = ipAddrToByte(ip)
@@ -350,9 +350,9 @@ func unsupportDNS(header DNSHeader, question DNSQuestion, ip string) []byte {
 
 	response.question = question
 
-	response.answer.aname = question.qname
-	response.answer.atype = question.qtype
-	response.answer.aclass = question.qclass
+	response.answer.aname = question.questionName
+	response.answer.atype = question.questionType
+	response.answer.aclass = question.questionClass
 	response.answer.ttl = 600
 	response.answer.rdlen = 4
 	response.answer.rdata = ipAddrToByte(ip)
@@ -369,7 +369,7 @@ func main() {
 	var remoteDNS string
 	var dnsListPath string
 	flag.StringVar(&remoteDNS, "remoteDNS", "8.8.8.8", "Forwarding DNS server")
-	flag.StringVar(&dnsListPath, "dnsListPath", "./dns-local.txt", "dns hook config file path")
+	flag.StringVar(&dnsListPath, "dnsListPath", "./dns-local.txt", "dns relay config file path")
 	flag.Parse()
 
 	dnsMap := readConfig(dnsListPath)
@@ -393,7 +393,7 @@ func main() {
 		if readErr != nil {
 			log.Printf("error during read: %s\n", readErr)
 		}
-
+		// start a thread once hearing from UDP
 		go func(ch byteTransefer) {
 			debug("start func\n")
 			data := ch.data
@@ -402,48 +402,48 @@ func main() {
 			header := getHeader(data[:n])
 			question := getQuestion(data[:n])
 
-			//debug("get qName %s\n", parseDomain(question.qname))
-			//log.Printf("====> get qName %s and its cache %s\n", parseDomain(question.qname), dnsMap[parseDomain(question.qname)])
+			//debug("get questionName %s\n", parseDomain(question.questionName))
+			//log.Printf("====> get questionName %s and its cache %s\n", parseDomain(question.questionName), dnsMap[parseDomain(question.questionName)])
 
-			//log.Printf("question %+v === type: %d\n", question, BytesToInt64(question.qtype))
-			if BytesToInt64(question.qtype) != 1 {
+			//log.Printf("question %+v === type: %d\n", question, BytesToInt64(question.questionType))
+			if BytesToInt64(question.questionType) != 1 {
 				rep := unsupportDNS(header, question, "0.0.0.0")
 				_, writeErr := listener.WriteToUDP(rep, remoteAddr)
 
 				if writeErr != nil {
 					log.Printf("error during write: %s", writeErr)
 				} else {
-					log.Printf("[unsupport protocal] %s ", parseDomain(question.qname))
+					log.Printf("[unsupport protocal] %s ", parseDomain(question.questionName))
 				}
 				return
 			}
 
-			if dnsMap == nil || dnsMap[parseDomain(question.qname)] == "" {
-				log.Printf("forward %s to %s\n", parseDomain(question.qname), remoteDNS)
+			if dnsMap == nil || dnsMap[parseDomain(question.questionName)] == "" {
+				log.Printf("forward %s to %s\n", parseDomain(question.questionName), remoteDNS)
 				_, writeErr := listener.WriteToUDP(Forward(data[:n], remoteDNS), remoteAddr)
 
 				if writeErr != nil {
 					log.Printf("error during write: %s\n", writeErr)
 				}
 				return
-			} else if dnsMap[parseDomain(question.qname)] == "0.0.0.0" {
-				rep := refuseDNS(header, question, dnsMap[parseDomain(question.qname)])
+			} else if dnsMap[parseDomain(question.questionName)] == "0.0.0.0" {
+				rep := refuseDNS(header, question, dnsMap[parseDomain(question.questionName)])
 				_, writeErr := listener.WriteToUDP(rep, remoteAddr)
 
 				if writeErr != nil {
 					log.Printf("error during write: %s", writeErr)
 				} else {
-					log.Printf("[refuse] %s return %s", parseDomain(question.qname), dnsMap[parseDomain(question.qname)])
+					log.Printf("[refuse] %s return %s", parseDomain(question.questionName), dnsMap[parseDomain(question.questionName)])
 				}
 				return
 			} else {
-				rsp := cacheDNS(header, question, dnsMap[parseDomain(question.qname)])
+				rsp := cacheDNS(header, question, dnsMap[parseDomain(question.questionName)])
 				_, writeErr := listener.WriteToUDP(rsp, remoteAddr)
 
 				if writeErr != nil {
 					log.Printf("error during write: %s", writeErr)
 				} else {
-					log.Printf("[cache] %s return %s", parseDomain(question.qname), dnsMap[parseDomain(question.qname)])
+					log.Printf("[cache] %s return %s", parseDomain(question.questionName), dnsMap[parseDomain(question.questionName)])
 				}
 			}
 		}(byteTransefer{data: data, n: n})
