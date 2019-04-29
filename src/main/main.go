@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-type DNSHeader struct {
+type DNSHeader struct { // 描述 DNS 报文结构
 	id            []byte
 	qr            int64
 	operationCode int64
@@ -27,13 +27,13 @@ type DNSHeader struct {
 	ARCount       int64
 }
 
-type DNSQuestion struct {
+type DNSQuestion struct { // DNS 请求结构
 	questionName  []byte
 	questionType  []byte
 	questionClass []byte
 }
 
-type DNSAnswer struct {
+type DNSAnswer struct { // DNS 应答结构
 	aname  []byte
 	atype  []byte
 	aclass []byte
@@ -42,13 +42,13 @@ type DNSAnswer struct {
 	rdata  []byte
 }
 
-type DNSResponse struct {
+type DNSResponse struct { // DNS 应答结构
 	header   DNSHeader
 	question DNSQuestion
 	answer   DNSAnswer
 }
 
-var questionTypeDict = map[int64]string{
+var questionTypeDict = map[int64]string{ // 枚举请求类型
 	1:   "A",
 	2:   "NS",
 	5:   "CNAME",
@@ -62,7 +62,7 @@ var questionTypeDict = map[int64]string{
 	255: "ANY",
 }
 
-func getHeader(data []byte) DNSHeader {
+func getHeader(data []byte) DNSHeader { // 解析请求头部
 	flags := data[2:4]
 
 	flagsStr := biu.BytesToBinaryString(flags)
@@ -86,7 +86,7 @@ func getHeader(data []byte) DNSHeader {
 	return *header
 }
 
-func getQuestion(data []byte) DNSQuestion {
+func getQuestion(data []byte) DNSQuestion { // 解析请求地址
 
 	qnameBytes := data[12 : len(data)-4]
 
@@ -99,8 +99,8 @@ func getQuestion(data []byte) DNSQuestion {
 	return *question
 }
 
-func Forward(data []byte, remoteDNS string) []byte {
-	socket, err := net.DialUDP("udp4", nil, &net.UDPAddr{
+func Forward(data []byte, remoteDNS string) []byte { // 控制转发
+	socket, err := net.DialUDP("udp4", nil, &net.UDPAddr{ // 创建 socket 连接
 		IP:   net.ParseIP(remoteDNS),
 		Port: 53,
 	})
@@ -110,7 +110,7 @@ func Forward(data []byte, remoteDNS string) []byte {
 	}
 	t := time.Now()
 
-	socket.SetDeadline(t.Add(time.Duration(5 * time.Second)))
+	socket.SetDeadline(t.Add(time.Duration(5 * time.Second))) // 设置超时时间
 
 	defer socket.Close()
 
@@ -120,22 +120,23 @@ func Forward(data []byte, remoteDNS string) []byte {
 		return nil
 	}
 
-	receiveData := make([]byte, 4096)
+	receiveData := make([]byte, 4096) // 创建缓冲区 大小为 4096 bytes
 	rn, remoteAddr, err := socket.ReadFromUDP(receiveData)
 	if err != nil {
 		log.Println("from ", remoteAddr, " read data failed!\n", err)
 		return nil
 	}
-	//log.Println(rn, remoteAddr)
-	//log.Printf("%x\n", receiveData[:rn])
+	// log.Println(rn, remoteAddr)
+	// log.Printf("%x\n", receiveData[:rn])
 
 	return receiveData[:rn]
 }
 
-func readConfig(dnsListPath string) map[string]string {
+func readConfig(dnsListPath string) map[string]string { // 创建转发表
 	var dnsMap = map[string]string{}
 	var dnsListFile, _ = os.OpenFile(dnsListPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	defer dnsListFile.Close()
+
 	dnsListScanner := bufio.NewScanner(dnsListFile)
 	for dnsListScanner.Scan() {
 		ip := ""
@@ -151,7 +152,7 @@ func readConfig(dnsListPath string) map[string]string {
 		dnsArr := strings.Split(dnsList, " ")
 		if len(dnsArr) >= 2 {
 			for _, dnsStr := range dnsArr {
-				if isIP(dnsStr) {
+				if isIP(dnsStr) { // 识别是否是 IP 地址
 					ip = dnsStr
 				} else {
 					domain = dnsStr
@@ -164,17 +165,15 @@ func readConfig(dnsListPath string) map[string]string {
 		} else {
 			log.Printf("dns config error, please check %s", dnsList)
 		}
-
 	}
-	log.Printf("current dns setting: %q", dnsMap)
+	log.Printf("current dns setting: %q", dnsMap) // 输出当前的 IP cache 包括缓存和拒绝服务的列表
 	if len(dnsMap) != 0 {
-		return dnsMap
+		return dnsMap // 确保返回的列表非空
 	}
 	return nil
 }
 
-func cacheDNS(header DNSHeader, question DNSQuestion, ip string) []byte {
-
+func cacheDNS(header DNSHeader, question DNSQuestion, ip string) []byte { // 构造缓存中的 dns 报文
 	response := DNSResponse{}
 
 	response.header.id = header.id
@@ -201,7 +200,6 @@ func cacheDNS(header DNSHeader, question DNSQuestion, ip string) []byte {
 	response.answer.rdata = ipAddrToByte(ip)
 
 	return reslove(response)
-
 }
 
 func reslove(response DNSResponse) []byte {
@@ -302,7 +300,7 @@ func main() {
 }
 */
 
-func refuseDNS(header DNSHeader, question DNSQuestion, ip string) []byte {
+func refuseDNS(header DNSHeader, question DNSQuestion, ip string) []byte { // 创建拒绝服务的 dns 报文
 	response := DNSResponse{}
 
 	response.header.id = header.id
@@ -331,7 +329,7 @@ func refuseDNS(header DNSHeader, question DNSQuestion, ip string) []byte {
 	return reslove(response)
 }
 
-func unsupportDNS(header DNSHeader, question DNSQuestion, ip string) []byte {
+func unsupportDNS(header DNSHeader, question DNSQuestion, ip string) []byte { // 创建不支持协议的 dns 报文
 	response := DNSResponse{}
 
 	response.header.id = header.id
@@ -370,11 +368,11 @@ func main() {
 	var dnsListPath string
 	flag.StringVar(&remoteDNS, "remoteDNS", "8.8.8.8", "Forwarding DNS server")
 	flag.StringVar(&dnsListPath, "dnsListPath", "./dns-local.txt", "dns relay config file path")
-	flag.Parse()
+	flag.Parse() // 解析传入参数
 
 	dnsMap := readConfig(dnsListPath)
 
-	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 53})
+	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 53}) // 开始监听 127.0.0.1:53
 
 	if err != nil {
 		log.Println(err)
@@ -394,7 +392,7 @@ func main() {
 			log.Printf("error during read: %s\n", readErr)
 		}
 		// start a thread once hearing from UDP
-		go func(ch byteTransefer) {
+		go func(ch byteTransefer) { // 多线程查询
 			debug("start func\n")
 			data := ch.data
 			n := ch.n
@@ -406,7 +404,7 @@ func main() {
 			//log.Printf("====> get questionName %s and its cache %s\n", parseDomain(question.questionName), dnsMap[parseDomain(question.questionName)])
 
 			//log.Printf("question %+v === type: %d\n", question, BytesToInt64(question.questionType))
-			if BytesToInt64(question.questionType) != 1 {
+			if BytesToInt64(question.questionType) != 1 { // 检查协议 v4 only
 				rep := unsupportDNS(header, question, "0.0.0.0")
 				_, writeErr := listener.WriteToUDP(rep, remoteAddr)
 
@@ -415,10 +413,10 @@ func main() {
 				} else {
 					log.Printf("[unsupport protocal] %s ", parseDomain(question.questionName))
 				}
-				return
+				return // 若协议不匹配直接丢弃
 			}
 
-			if dnsMap == nil || dnsMap[parseDomain(question.questionName)] == "" {
+			if dnsMap == nil || dnsMap[parseDomain(question.questionName)] == "" { // 表中没有记录的项 进行转发 ===> 中继
 				log.Printf("forward %s to %s\n", parseDomain(question.questionName), remoteDNS)
 				_, writeErr := listener.WriteToUDP(Forward(data[:n], remoteDNS), remoteAddr)
 
@@ -426,7 +424,7 @@ func main() {
 					log.Printf("error during write: %s\n", writeErr)
 				}
 				return
-			} else if dnsMap[parseDomain(question.questionName)] == "0.0.0.0" {
+			} else if dnsMap[parseDomain(question.questionName)] == "0.0.0.0" { // 查表看看是不是拒绝服务的项 回复拒绝服务
 				rep := refuseDNS(header, question, dnsMap[parseDomain(question.questionName)])
 				_, writeErr := listener.WriteToUDP(rep, remoteAddr)
 
@@ -437,7 +435,7 @@ func main() {
 				}
 				return
 			} else {
-				rsp := cacheDNS(header, question, dnsMap[parseDomain(question.questionName)])
+				rsp := cacheDNS(header, question, dnsMap[parseDomain(question.questionName)]) // 表中有且不是 拒绝服务的项 ===> 直接返回 服务器功能
 				_, writeErr := listener.WriteToUDP(rsp, remoteAddr)
 
 				if writeErr != nil {
