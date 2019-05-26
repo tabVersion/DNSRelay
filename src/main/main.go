@@ -418,7 +418,7 @@ func main() {
 				} else {
 					log.Printf("[unsupport protocal] %s ", parseDomain(question.questionName))
 				}
-				_ := <-index_channel
+				_ = <-index_channel
 				return // 若协议不匹配直接丢弃
 			}
 
@@ -429,7 +429,7 @@ func main() {
 				if writeErr != nil {
 					log.Printf("error during write: %s\n", writeErr)
 				}
-				_ := <-index_channel
+				_ = <-index_channel
 				return
 			} else if dnsMap[parseDomain(question.questionName)] == "0.0.0.0" { // 查表看看是不是拒绝服务的项 回复拒绝服务
 				rep := refuseDNS(header, question, dnsMap[parseDomain(question.questionName)])
@@ -440,7 +440,7 @@ func main() {
 				} else {
 					log.Printf("[refuse] %s return %s", parseDomain(question.questionName), dnsMap[parseDomain(question.questionName)])
 				}
-				_ := <-index_channel
+				_ = <-index_channel
 				return
 			} else {
 				rsp := cacheDNS(header, question, dnsMap[parseDomain(question.questionName)]) // 表中有且不是 拒绝服务的项 ===> 直接返回 服务器功能
@@ -452,7 +452,7 @@ func main() {
 					log.Printf("[cache] %s return %s", parseDomain(question.questionName), dnsMap[parseDomain(question.questionName)])
 				}
 			}
-			_ := <-index_channel
+			_ = <-index_channel
 		}(byteTransefer{data: data, n: n})
 	}
 }
