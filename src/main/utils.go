@@ -5,19 +5,27 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
-const debugEnanled = false // 控制是否打印调试信息
+var debugEnabled = false // 控制是否打印调试信息
+var debugLevel = 1
+var debugIndex = 0
 
-// 包装debug 快速取消中间log打印
-func debug(format string, a ...interface{}) (n int, err error) {
-	if debugEnanled {
-		log.Printf("DEBUG:")
-		n, err = fmt.Printf(format)
+// 包装debug
+func debug(logLevel int, format string, a ...interface{}) (n int, err error) {
+	if logLevel == debugLevel && debugEnabled {
+		if debugLevel == 1 {
+			fmt.Printf("%v index %d ", time.Now().Format("2006/01/02 15:04:05"), debugIndex) // TODO
+			n, err = fmt.Printf(format, a...)
+			debugIndex = debugIndex + 1
+		} else if debugLevel == 2 {
+			n, err = fmt.Printf(format, a...)
+			// debugIndex = debugIndex + 1
+		}
 	}
 	return
 }
@@ -76,6 +84,16 @@ func Int64ToBytes(i int64) []byte {
 	return b_buf.Bytes()[len(b_buf.Bytes())-2:]
 }
 
+func Int64ToBytes_fix(i int64) []byte {
+	b_buf := bytes.NewBuffer([]byte{})
+	binary.Write(b_buf, binary.LittleEndian, i)
+	return b_buf.Bytes()[len(b_buf.Bytes())-2:]
+}
+
+func BytesToInt64_fix(buf []byte) int64 {
+	return int64(binary.LittleEndian.Uint64(buf))
+}
+
 // byte 数组转 int64
 func BytesToInt64(buf []byte) int64 {
 	bufStr := biu.BytesToBinaryString(buf)
@@ -89,7 +107,7 @@ func StringToInt64(str string) int64 {
 	return intStr
 }
 
-// 正则判断字符串是否为 IP
+// 正则判断字符串是否为 IP地址
 func isIP(str string) bool {
 	ipRe := regexp.MustCompile(`^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$`)
 	return ipRe.MatchString(str)
@@ -99,4 +117,14 @@ func isIP(str string) bool {
 func isDomain(str string) bool {
 	domainRe := regexp.MustCompile(`([a-z0-9--]{1,200})\.([a-z]{2,10})(\.[a-z]{2,10})?`)
 	return domainRe.MatchString(str)
+}
+
+//将slice转成16进制byte串输出
+func DecimalByteSlice2HexString(DecimalSlice []byte) string {
+	var sa = make([]string, 0)
+	for _, v := range DecimalSlice {
+		sa = append(sa, fmt.Sprintf("%02X", v))
+	}
+	ss := strings.Join(sa, " ")
+	return ss
 }
