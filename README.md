@@ -14,6 +14,6 @@ when comes a request, it will check whether the requested url is in cache
     - else return the cached ip-address   
 - otherwise, it will forward the request to remote server `8.8.8.8` (default)
 
-(optional)
---remoteDNS (ip address of remote DNS)
---dnsListPath (path of cache file **format needed (plz see `dns-local.txt`)**)
+(optional)  
+--remoteDNS (ip address of remote DNS)  
+--dnsListPath (path of cache file **format needed (plz see `dns-local.txt`)**
